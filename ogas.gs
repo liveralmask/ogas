@@ -11,11 +11,11 @@ function setup(){
   
   var log_sheet = ogas.spreadsheet.sheet( "log", true );
   
-  var rules_sheet = ogas.spreadsheet.sheet( "rules", true );
-  if ( "" == rules_sheet.getRange( "A1" ).getValue() ){
-    rules_sheet.getRange( "A1" ).setValue( "name" );
-    rules_sheet.getRange( "B1" ).setValue( "pattern" );
-    rules_sheet.getRange( "C1" ).setValue( "flags" );
+  var save_rules_sheet = ogas.spreadsheet.sheet( "save_rules", true );
+  if ( "" == save_rules_sheet.getRange( "A1" ).getValue() ){
+    save_rules_sheet.getRange( "A1" ).setValue( "name" );
+    save_rules_sheet.getRange( "B1" ).setValue( "pattern" );
+    save_rules_sheet.getRange( "C1" ).setValue( "flags" );
   }
 }
 
@@ -37,9 +37,13 @@ function doPost( e ){
 }
 
 function main( e ){
-  init( e );
-  update();
-  exit();
+  try{
+    init( e );
+    update();
+    exit();
+  }catch ( err ){
+    ogas.log.err( ogas.string.format( "{0} e={1}\n{2}", err, ogas.json.encode( e ), err.stack ) );
+  }
 }
 
 function init( e ){
@@ -57,12 +61,12 @@ function init( e ){
   var log_sheet = spreadsheet.getSheetByName( "log" );
   ogas.vars.set( "log_sheet", log_sheet );
   
-  var rules_sheet = spreadsheet.getSheetByName( "rules" );
-  ogas.vars.set( "rules_sheet", rules_sheet );
-  set_rules( rules_sheet );
+  var save_rules_sheet = spreadsheet.getSheetByName( "save_rules" );
+  ogas.vars.set( "save_rules_sheet", save_rules_sheet );
+  set_save_rules( save_rules_sheet );
 }
 
-function set_rules( sheet ){
+function set_save_rules( sheet ){
   var values = sheet.getDataRange().getValues();
   var keys = values.shift();
   var values_len = values.length;

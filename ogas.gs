@@ -82,17 +82,14 @@ function update(){
   
   var matches = ogas.pattern.matches( text );
   var matches_len = matches.length;
+  var actions = {};
   for ( var i = 0; i < matches_len; ++i ){
     var match = matches[ i ];
-    var method_name = ogas.string.format( "on_{0}", match.value );
-    var method = new Function( "value", ogas.string.format( "return {0}( value )", method_name ) );
-    try{
-      method( match );
-    }catch ( e ){
-      ogas.log.err( ogas.string.format( "{0} user_name={1} match={2} text={3}\n{4}",
-        e, user_name, ogas.json.encode( match ), text, e.stack ) );
-    }
+    
+    match.matches.shift();
+    actions[ match.value ] = match.matches;
   }
+  if ( 0 < Object.keys( actions ).length ) save_actions( actions );
 }
 
 function exit(){
@@ -101,13 +98,6 @@ function exit(){
 
 function save_actions( actions ){
   ogas.action.save( ogas.vars.get( "user_name" ), actions, ogas.vars.get( "local_time" ) );
-}
-
-function on_add( match ){
-  match.matches.shift();
-  var actions = {};
-  actions[ match.value ] = ( 0 < match.matches.length ) ? match.matches : null;
-  save_actions( actions );
 }
 
 var ogas = ogas || {};
@@ -352,17 +342,8 @@ ogas.Pattern.prototype.match = function( value ){
       ogas.string.padding_zero( 2, local_time.hour() ),
       ogas.string.padding_zero( 2, local_time.min() ),
       ogas.string.padding_zero( 2, local_time.sec() ) );
-    value = ( "" === value ) ? {} : ogas.json.decode( value );
-    for ( var key in actions ){
-      var add_value = { t : timestamp };
-      var action = actions[ key ];
-      if ( null != action ) add_value[ "a" ] = action; 
-      if ( key in value ){
-        value[ key ].push( add_value );
-      }else{
-        value[ key ] = [ add_value ];
-      }
-    }
+    value = ( "" === value ) ? [] : ogas.json.decode( value );
+    value.push({ t : timestamp, a : actions });
     return ogas.json.encode( value );
   };
 })(ogas.action = ogas.action || {});

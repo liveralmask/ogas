@@ -1,19 +1,22 @@
+var g_spreadsheet_name = "ogas";
+
 function setup(){
   if ( null != ogas.cache.get( "spreadsheet_id" ) ) return;
   
-  // TODO スプレッドシートを作成し、IDをキャッシュに保存
-  
-  
-  var spreadsheet = SpreadsheetApp.openById( ogas.cache.get( "spreadsheet_id" ) );
-  ogas.spreadsheet.set( spreadsheet );
+  var spreadsheet = SpreadsheetApp.create( g_spreadsheet_name );
+  ogas.cache.set( "spreadsheet_id", spreadsheet.getId() );
+  ogas.spreadsheet.set( SpreadsheetApp.openById( ogas.cache.get( "spreadsheet_id" ) ) );
   
   var config_sheet = ogas.spreadsheet.sheet( "config", true );
   
   var log_sheet = ogas.spreadsheet.sheet( "log", true );
   
   var rules_sheet = ogas.spreadsheet.sheet( "rules", true );
-  
-  
+  if ( "" == rules_sheet.getRange( "A1" ).getValue() ){
+    rules_sheet.getRange( "A1" ).setValue( "name" );
+    rules_sheet.getRange( "B1" ).setValue( "pattern" );
+    rules_sheet.getRange( "C1" ).setValue( "flags" );
+  }
 }
 
 function doGet( e ){
@@ -40,7 +43,8 @@ function main( e ){
 }
 
 function init( e ){
-  ogas.vars.set( "local_time", ogas.time.local_time() );
+  var local_time = ogas.time.local_time();
+  ogas.vars.set( "local_time", local_time );
   ogas.vars.set( "user_name", e.parameter.user_name );
   ogas.vars.set( "text", e.parameter.text );
   
@@ -55,24 +59,55 @@ function init( e ){
   
   var rules_sheet = spreadsheet.getSheetByName( "rules" );
   ogas.vars.set( "rules_sheet", rules_sheet );
-  
-  ogas.pattern.add( "TEST", "test" );
+  set_rules( rules_sheet );
+}
+
+function set_rules( sheet ){
+  var values = sheet.getDataRange().getValues();
+  var keys = values.shift();
+  var values_len = values.length;
+  var name_index = keys.indexOf( "name" );
+  var pattern_index = keys.indexOf( "pattern" );
+  var flags_index = keys.indexOf( "flags" );
+  for ( var i = 0; i < values_len; ++i ){
+    var value = values[ i ];
+    ogas.pattern.add( value[ name_index ], value[ pattern_index ], value[ flags_index ] );
+  }
 }
 
 function update(){
-  ogas.log.dbg( "{0} => {1}", ogas.vars.get( "user_name" ), ogas.vars.get( "text" ) );
+  var user_name = ogas.vars.get( "user_name" );
+  var text      = ogas.vars.get( "text" );
+  ogas.log.dbg( "{0} => {1}", user_name, text );
   
-  var result = ogas.pattern.match( "test" );
-  if ( null == result ) return;
-  
-  result.matches.shift();
-  var actions = {};
-  actions[ result.name ] = result.matches;
-  ogas.action.save( ogas.vars.get( "user_name" ), actions, ogas.vars.get( "local_time" ) );
+  var matches = ogas.pattern.matches( text );
+  var matches_len = matches.length;
+  for ( var i = 0; i < matches_len; ++i ){
+    var match = matches[ i ];
+    var method_name = ogas.string.format( "on_{0}", match.value );
+    var method = new Function( "value", ogas.string.format( "return {0}( value )", method_name ) );
+    try{
+      method( match );
+    }catch ( e ){
+      ogas.log.err( ogas.string.format( "{0} user_name={1} match={2} text={3}\n{4}",
+        e, user_name, ogas.json.encode( match ), text, e.stack ) );
+    }
+  }
 }
 
 function exit(){
   
+}
+
+function save_actions( actions ){
+  ogas.action.save( ogas.vars.get( "user_name" ), actions, ogas.vars.get( "local_time" ) );
+}
+
+function on_add( match ){
+  match.matches.shift();
+  var actions = {};
+  actions[ match.value ] = ( 0 < match.matches.length ) ? match.matches : null;
+  save_actions( actions );
 }
 
 var ogas = ogas || {};
@@ -96,6 +131,19 @@ var ogas = ogas || {};
     var cell = sheet.getRange( sheet.getLastRow(), 1 );
     if ( "fc" in options ) cell.setFontColor( options.fc );
     if ( "bc" in options ) cell.setBackgroundColor( options.bc );
+    
+    var log_num = sheet.getLastRow();
+    var max_log_num = sheet.getMaxRows();
+    if ( max_log_num <= log_num ){
+      sheet.setName( ogas.string.format( "log_{0}{1}{2}_{3}{4}{5}",
+        local_time.year(),
+        ogas.string.padding_zero( 2, local_time.month() ),
+        ogas.string.padding_zero( 2, local_time.date() ),
+        ogas.string.padding_zero( 2, local_time.hour() ),
+        ogas.string.padding_zero( 2, local_time.min() ),
+        ogas.string.padding_zero( 2, local_time.sec() ) ) );
+      ogas.vars.set( "log_sheet", ogas.spreadsheet.sheet( "log", true, log_sheet.getIndex() - 1 ) );
+    }
   }
   
   log.dbg = function(){
@@ -154,26 +202,43 @@ var ogas = ogas || {};
     return m_spreadsheet;
   };
   
-  spreadsheet.sheet = function( name, is_insert ){
+  spreadsheet.sheet = function( name, is_insert, insert_index ){
     if ( typeof is_insert === "undefined" ) is_insert = false;
+    if ( typeof insert_index === "undefined" ) insert_index = -1;
     
     var sheet = m_spreadsheet.getSheetByName( name );
     if ( null == sheet ){
-      if ( is_insert ) sheet = m_spreadsheet.insertSheet( name );
+      if ( is_insert ) sheet = m_spreadsheet.insertSheet( name, ( 0 <= insert_index ) ? insert_index : m_spreadsheet.getNumSheets() );
     }
     return sheet;
   };
 })(ogas.spreadsheet = ogas.spreadsheet || {});
 
+(function( sheet ){
+  sheet.column_values = function( values, column_index ){
+    var column_values = [];
+    var values_len = values.length;
+    for ( var row_index = 0; row_index < values_len; ++row_index ){
+      column_values.push( values[ row_index ][ column_index ] );
+    }
+    return column_values;
+  };
+})(ogas.sheet = ogas.sheet || {});
+
 (function( string ){
   string.format = function(){
     var args = Array.prototype.slice.call( arguments );
-    var format = args.shift();
-    var args_len = args.length;
-    for ( var i = args.length - 1; 0 <= i; --i ){
-      format = format.replace( "{"+ i +"}", args[ i ] );
+    var head = "";
+    var tail = args.shift();
+    var pattern = new ogas.Pattern( undefined, "\{([0-9]+)\}" );
+    while ( "" != tail ){
+      var match = pattern.match( tail );
+      if ( null == match ) break;
+      
+      head += match.head + args[ Number( match.matches[ 1 ] ) ];
+      tail = match.tail;
     }
-    return format;
+    return head + tail;
   };
   
   string.multi = function( value, count ){
@@ -185,17 +250,17 @@ var ogas = ogas || {};
   };
   
   string.padding_zero = function( digit, value ){
-    return ( string.multi( "0", ( digit - 1 ) ) + value ).slice( - digit );
+    return ( string.multi( "0", digit ) + value ).slice( - digit );
   };
 })(ogas.string = ogas.string || {});
 
-ogas.Pattern = function( name, pattern, flags ){
-  this.m_name    = name;
+ogas.Pattern = function( value, pattern, flags ){
+  this.m_value = value;
   this.m_regex = new RegExp( pattern, flags );
 };
 ogas.Pattern.prototype.match = function( value ){
   var matches = this.m_regex.exec( value );
-  return ( null == matches ) ? null : { name : this.m_name, matches : matches };
+  return ( null == matches ) ? null : { value : this.m_value, matches : matches, head : RegExp.leftContext, tail : RegExp.rightContext };
 };
 
 (function( pattern ){
@@ -209,13 +274,14 @@ ogas.Pattern.prototype.match = function( value ){
     m_patterns.push( new ogas.Pattern( name, pattern, flags ) );
   };
   
-  pattern.match = function( value ){
+  pattern.matches = function( value ){
+    var matches = [];
     var patterns_len = m_patterns.length;
     for ( var i = 0; i < patterns_len; ++i ){
       var result = m_patterns[ i ].match( value );
-      if ( null != result ) return result;
+      if ( null != result ) matches.push( result );
     }
-    return null;
+    return matches;
   };
 })(ogas.pattern = ogas.pattern || {});
 
@@ -269,16 +335,16 @@ ogas.Pattern.prototype.match = function( value ){
     var sheet_name = ogas.string.format( "{0}{1}", local_time.year(), ogas.string.padding_zero( 2, local_time.month() ) );
     var sheet = ogas.spreadsheet.sheet( sheet_name, true );
     var values = sheet.getDataRange().getValues();
-    var user_names = values[ 0 ];
+    var user_names = ogas.sheet.column_values( values, 0 );
     var user_index = user_names.indexOf( user_name ) + 1;
-    var date_index = local_time.date() + 1;
+    var hour_index = local_time.hour() + 2;
     if ( 0 == user_index ){
       user_index = user_names.length;
       if ( "" !== user_names[ 0 ] ) user_index += 1;
-      sheet.getRange( 1, user_index ).setValue( user_name );
+      sheet.getRange( user_index, 1 ).setValue( user_name );
     }
-    var value = merge( sheet.getRange( date_index, user_index ).getValue(), actions, local_time );
-    sheet.getRange( date_index, user_index ).setValue( value );
+    var value = merge( sheet.getRange( user_index, hour_index ).getValue(), actions, local_time );
+    sheet.getRange( user_index, hour_index ).setValue( value );
   };
   
   merge = function( value, actions, local_time ){
@@ -290,7 +356,7 @@ ogas.Pattern.prototype.match = function( value ){
     for ( var key in actions ){
       var add_value = { t : timestamp };
       var action = actions[ key ];
-      if ( 0 < action.length ) add_value[ a ] = action; 
+      if ( null != action ) add_value[ "a" ] = action; 
       if ( key in value ){
         value[ key ].push( add_value );
       }else{

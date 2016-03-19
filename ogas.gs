@@ -328,24 +328,27 @@ ogas.Pattern.prototype.match = function( value ){
     
     var sheet_name = ogas.string.format( "{0}{1}", local_time.year(), ogas.string.padding_zero( 2, local_time.month() ) );
     var sheet = ogas.spreadsheet.sheet( sheet_name, true );
+    var max_column_num = sheet.getMaxColumns();
+    var add_column_num = 32 - max_column_num;
+    if ( 0 < add_column_num ) sheet.getRange( 1, max_column_num + add_column_num ).setValue( "" );
     var values = sheet.getDataRange().getValues();
     var user_names = ogas.sheet.column_values( values, 0 );
     var user_index = user_names.indexOf( user_name ) + 1;
-    var hour_index = local_time.hour() + 2;
+    var date_index = local_time.date() + 1;
     if ( 0 == user_index ){
       user_index = user_names.length;
       if ( "" !== user_names[ 0 ] ) user_index += 1;
       sheet.getRange( user_index, 1 ).setValue( user_name );
     }
-    var value = merge( sheet.getRange( user_index, hour_index ).getValue(), actions, local_time );
-    sheet.getRange( user_index, hour_index ).setValue( value );
+    var value = merge( sheet.getRange( user_index, date_index ).getValue(), actions, local_time );
+    sheet.getRange( user_index, date_index ).setValue( value );
   };
   
   merge = function( value, actions, local_time ){
     var timestamp = ogas.string.format( "{0}:{1}:{2}",
-      ogas.string.padding_zero( 2, local_time.hour() ),
-      ogas.string.padding_zero( 2, local_time.min() ),
-      ogas.string.padding_zero( 2, local_time.sec() ) );
+      local_time.hour(),
+      local_time.min(),
+      local_time.sec() );
     value = ( "" === value ) ? [] : ogas.json.decode( value );
     value.push({ t : timestamp, a : actions });
     return ogas.json.encode( value );

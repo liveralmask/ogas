@@ -320,7 +320,9 @@ ogas.Pattern.prototype.match = function( value ){
   };
   
   pattern.matches = function( type, value ){
-    var matches = [];
+    if ( undefined === m_patterns[ type ] ) return [];
+    
+  　var matches = [];
     var patterns_len = m_patterns[ type ].length;
     for ( var i = 0; i < patterns_len; ++i ){
       var result = m_patterns[ type ][ i ].match( value );

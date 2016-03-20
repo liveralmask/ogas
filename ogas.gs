@@ -12,8 +12,8 @@ function doGet( e ){
   if ( undefined == e ){
     e = {
       parameter : {
-        user_name : "user",
-        text      : "text",
+        user_name : "test_user",
+        text      : "おは",
       },
     };
   }
@@ -91,9 +91,14 @@ function set_save_rules( sheet ){
   var name_index = keys.indexOf( "name" );
   var pattern_index = keys.indexOf( "pattern" );
   var flags_index = keys.indexOf( "flags" );
+  var slack_text_index = keys.indexOf( "slack_text" );
   for ( var i = 0; i < values_len; ++i ){
     var value = values[ i ];
-    ogas.pattern.add( "save", value[ name_index ], value[ pattern_index ], value[ flags_index ] );
+    var name = value[ name_index ];
+    var pattern = value[ pattern_index ];
+    var flags = value[ flags_index ];
+    var slack_text = value[ slack_text_index ];
+    ogas.pattern.add( "save", { name : name, slack_text : slack_text }, pattern, flags );
   }
 }
 
@@ -106,7 +111,10 @@ function set_load_rules( sheet ){
   var flags_index = keys.indexOf( "flags" );
   for ( var i = 0; i < values_len; ++i ){
     var value = values[ i ];
-    ogas.pattern.add( "load", value[ name_index ], value[ pattern_index ], value[ flags_index ] );
+    var name = value[ name_index ];
+    var pattern = value[ pattern_index ];
+    var flags = value[ flags_index ];
+    ogas.pattern.add( "load", { name : name }, pattern, flags );
   }
 }
 
@@ -138,11 +146,23 @@ function save( request_time, user_name, text ){
     var match = matches[ i ];
     
     match.matches.shift();
-    var result = ogas.method.call( global, ogas.string.format( "on_save_{0}", match.value ), match.matches );
-    if ( undefined === result ) result = match.matches;
-    values[ match.value ] = result;
+    var result = ogas.method.call( global, ogas.string.format( "on_save_{0}", match.value.name ), match );
+    if ( undefined === result ) result = on_save( match );
+    values[ match.value.name ] = result;
   }
   if ( 0 < Object.keys( values ).length ) ogas.action.save( user_name, values, request_time );
+}
+
+function on_save( match ){
+  if ( "" != match.value.slack_text ){
+    var request_time = ogas.vars.get( "request_time" );
+    var user_name = ogas.vars.get( "user_name" );
+    var hour = ogas.string.padding_zero( 2, request_time.hour() );
+    var min = ogas.string.padding_zero( 2, request_time.min() );
+    var text = ogas.string.replace( match.value.slack_text, { user_name : user_name, hour : hour, min : min } );
+    slack_post( text );
+  }
+  return match.matches;
 }
 
 function load( request_time, user_name, text ){
@@ -152,8 +172,18 @@ function load( request_time, user_name, text ){
     var match = matches[ i ];
     
     match.matches.shift();
-    ogas.method.call( global, ogas.string.format( "on_load_{0}", match.value ), match.matches );
+    var result = ogas.method.call( global, ogas.string.format( "on_load_{0}", match.value.name ), match );
+    if ( undefined === result ) on_load( match );
   }
+}
+
+function on_load( match ){
+  return match.matches;
+}
+
+function slack_post( text ){
+  var slack_incoming_webhook_url = ogas.vars.get( "slack_incoming_webhook_url" );
+  ogas.slack.post( slack_incoming_webhook_url, { text : text } );
 }
 
 var ogas = ogas || {};
@@ -317,6 +347,21 @@ var ogas = ogas || {};
   
   string.padding_zero = function( digit, value ){
     return ( string.multi( "0", digit ) + value ).slice( - digit );
+  };
+  
+  string.replace = function( format, values ){
+    var head = "";
+    var tail = format;
+    var pattern = new ogas.Pattern( undefined, "\{([a-zA-Z0-9_]+)\}" );
+    while ( "" != tail ){
+      var match = pattern.match( tail );
+      if ( null == match ) break;
+      
+      var key = match.matches[ 1 ];
+      head += ( key in values ) ? match.head + values[ key ] : match.matches[ 0 ];
+      tail = match.tail;
+    }
+    return head + tail;
   };
 })(ogas.string = ogas.string || {});
 

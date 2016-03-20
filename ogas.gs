@@ -1,4 +1,5 @@
 var g_spreadsheet_name = "ogas";
+var g_ignore_users = [ "slackbot" ];
 
 function setup(){
   if ( null != ogas.cache.get( "spreadsheet_id" ) ) return;
@@ -47,25 +48,40 @@ function init(){
   var config_sheet = ogas.sheet.open( spreadsheet, "config" );
   if ( "" == ogas.sheet.get( config_sheet, "A1" ) ){
     ogas.sheet.set( config_sheet, "A1", "ignore_users" );
+    ogas.sheet.set( config_sheet, "A2", "slack_incoming_webhook_url" );
   }
   ogas.vars.set( "config_sheet", config_sheet );
+  set_config( config_sheet );
   
   var save_rules_sheet = ogas.sheet.open( spreadsheet, "save_rules" );
   if ( "" == ogas.sheet.get( save_rules_sheet, "A1" ) ){
-    ogas.sheet.sets( save_rules_sheet, 1, 1, 1, 3, [[ "name", "pattern", "flags" ]] );
+    ogas.sheet.add_row( save_rules_sheet, [ "name", "pattern", "flags" ] );
   }
   ogas.vars.set( "save_rules_sheet", save_rules_sheet );
   set_save_rules( save_rules_sheet );
   
   var load_rules_sheet = ogas.sheet.open( spreadsheet, "load_rules" );
   if ( "" == ogas.sheet.get( load_rules_sheet, "A1" ) ){
-    ogas.sheet.sets( load_rules_sheet, 1, 1, 1, 3, [[ "name", "pattern", "flags" ]] );
+    ogas.sheet.add_row( load_rules_sheet, [ "name", "pattern", "flags" ] );
   }
   ogas.vars.set( "load_rules_sheet", load_rules_sheet );
   set_load_rules( load_rules_sheet );
   
   var log_sheet = ogas.sheet.open( spreadsheet, "log" );
   ogas.vars.set( "log_sheet", log_sheet );
+}
+
+function set_config( sheet ){
+  var ignore_users = ogas.sheet.gets( sheet ).shift();
+  ignore_users.shift();
+  var ignore_users_len = ignore_users.length;
+  for ( var i = 0; i < ignore_users_len; ++i ){
+    var ignore_user = ignore_users[ i ];
+    if ( "" != ignore_user ) g_ignore_users.push( ignore_user );
+  }
+  
+  var slack_incoming_webhook_url = ogas.sheet.get( sheet, "B2" );
+  if ( "" != slack_incoming_webhook_url ) ogas.vars.set( "slack_incoming_webhook_url", slack_incoming_webhook_url );
 }
 
 function set_save_rules( sheet ){
@@ -94,10 +110,16 @@ function set_load_rules( sheet ){
   }
 }
 
+function is_ignore_user( user_name ){
+  return ( 0 <= g_ignore_users.indexOf( user_name ) );
+}
+
 function update(){
   var request_time = ogas.vars.get( "request_time" );
   var user_name    = ogas.vars.get( "user_name" );
   var text         = ogas.vars.get( "text" );
+  if ( is_ignore_user( user_name ) ) return;
+  
   ogas.log.dbg( "{0} => {1}", user_name, text );
   
   save( request_time, user_name, text );
@@ -462,5 +484,11 @@ ogas.Pattern.prototype.match = function( value ){
     return ( undefined === instance[ name ] ) ? undefined : instance[ name ].apply( instance, args );
   };
 })(ogas.method = ogas.method || {});
+
+(function( slack ){
+  slack.post = function( url, params ){
+    return UrlFetchApp.fetch( url, { method : "post", contentType : "application/json", payload : ogas.json.encode( params ) } );
+  };
+})(ogas.slack = ogas.slack || {});
 
 var global = this;

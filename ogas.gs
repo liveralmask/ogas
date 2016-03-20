@@ -13,7 +13,8 @@ function doGet( e ){
     e = {
       parameter : {
         user_name : "test_user",
-        text      : "おは",
+        text      : "ルール",
+        token     : "",
       },
     };
   }
@@ -29,6 +30,7 @@ function main( e ){
   try{
     ogas.vars.set( "user_name", e.parameter.user_name );
     ogas.vars.set( "text", e.parameter.text );
+    ogas.vars.set( "token", e.parameter.token );
     
     init();
     update();
@@ -47,8 +49,9 @@ function init(){
   
   var config_sheet = ogas.sheet.open( spreadsheet, "config" );
   if ( "" == ogas.sheet.get( config_sheet, "A1" ) ){
-    ogas.sheet.set( config_sheet, "A1", "ignore_users" );
-    ogas.sheet.set( config_sheet, "A2", "slack_incoming_webhook_url" );
+    ogas.sheet.set( config_sheet, "A1", "slack_incoming_webhook_url" );
+    ogas.sheet.set( config_sheet, "A2", "slack_outgoing_webhook_token" );
+    ogas.sheet.set( config_sheet, "A3", "ignore_users" );
   }
   ogas.vars.set( "config_sheet", config_sheet );
   set_config( config_sheet );
@@ -72,16 +75,23 @@ function init(){
 }
 
 function set_config( sheet ){
-  var ignore_users = ogas.sheet.gets( sheet ).shift();
-  ignore_users.shift();
+  var values = ogas.sheet.gets( sheet );
+  var keys = ogas.sheet.column_values( values, 0 );
+  var ignore_users_index = keys.indexOf( "ignore_users" );
+  var slack_incoming_webhook_url_index = keys.indexOf( "slack_incoming_webhook_url" );
+  var slack_outgoing_webhook_token_index = keys.indexOf( "slack_outgoing_webhook_token" );
+  var ignore_users = values[ ignore_users_index ].slice( 1 );
   var ignore_users_len = ignore_users.length;
   for ( var i = 0; i < ignore_users_len; ++i ){
     var ignore_user = ignore_users[ i ];
     if ( "" != ignore_user ) g_ignore_users.push( ignore_user );
   }
   
-  var slack_incoming_webhook_url = ogas.sheet.get( sheet, "B2" );
-  if ( "" != slack_incoming_webhook_url ) ogas.vars.set( "slack_incoming_webhook_url", slack_incoming_webhook_url );
+  var slack_incoming_webhook_url = values[ slack_incoming_webhook_url_index ][ 1 ];
+  ogas.vars.set( "slack_incoming_webhook_url", slack_incoming_webhook_url );
+  
+  var slack_outgoing_webhook_token = values[ slack_outgoing_webhook_token_index ][ 1 ];
+  ogas.vars.set( "slack_outgoing_webhook_token", slack_outgoing_webhook_token );
 }
 
 function set_save_rules( sheet ){
@@ -118,20 +128,32 @@ function set_load_rules( sheet ){
   }
 }
 
-function is_ignore_user( user_name ){
-  return ( 0 <= g_ignore_users.indexOf( user_name ) );
-}
-
 function update(){
   var request_time = ogas.vars.get( "request_time" );
   var user_name    = ogas.vars.get( "user_name" );
   var text         = ogas.vars.get( "text" );
-  if ( is_ignore_user( user_name ) ) return;
+  var token        = ogas.vars.get( "token" );
+  if ( ! is_update( user_name, token ) ) return;
   
   ogas.log.dbg( "{0} => {1}", user_name, text );
   
   save( request_time, user_name, text );
   load( request_time, user_name, text );
+}
+
+function is_update( user_name, token ){
+  if ( is_ignore_user( user_name ) ) return false;
+  if ( is_invalid_token( token ) ) return false;
+  return true;
+}
+
+function is_ignore_user( user_name ){
+  return ( 0 <= g_ignore_users.indexOf( user_name ) );
+}
+
+function is_invalid_token( token ){
+  var slack_outgoing_webhook_token = ogas.vars.get( "slack_outgoing_webhook_token" );
+  return ( "" == slack_outgoing_webhook_token ) ? false : ( slack_outgoing_webhook_token != token );
 }
 
 function exit(){
@@ -157,9 +179,8 @@ function on_save( match ){
   if ( "" != match.value.slack_text ){
     var request_time = ogas.vars.get( "request_time" );
     var user_name = ogas.vars.get( "user_name" );
-    var hour = ogas.string.padding_zero( 2, request_time.hour() );
-    var min = ogas.string.padding_zero( 2, request_time.min() );
-    var text = ogas.string.replace( match.value.slack_text, { user_name : user_name, hour : hour, min : min } );
+    var time = ogas.time.format( "hm", request_time );
+    var text = ogas.string.replace( match.value.slack_text, { user_name : user_name, time : time } );
     slack_post( text );
   }
   return match.matches;
@@ -181,9 +202,35 @@ function on_load( match ){
   return match.matches;
 }
 
+function on_load_rule( match ){
+  var user_name = ogas.vars.get( "user_name" );
+  var save_rules_sheet = ogas.vars.get( "save_rules_sheet" );
+  var load_rules_sheet = ogas.vars.get( "load_rules_sheet" );
+  var array = [ "<ルール>" ];
+  
+  var send_rules = ogas.sheet.values_to_tables( ogas.sheet.gets( save_rules_sheet ) );
+  var send_rules_len = send_rules.length;
+  array.push( ogas.string.format( "[Save] {0}", send_rules_len ) );
+  for ( var i = 0; i < send_rules_len; ++i ){
+    var send_rule = send_rules[ i ];
+    array.push( ogas.string.format( "/{0}/{1}", send_rule.pattern, send_rule.flags ) );
+  }
+  
+  var load_rules = ogas.sheet.values_to_tables( ogas.sheet.gets( load_rules_sheet ) );
+  var load_rules_len = load_rules.length;
+  array.push( ogas.string.format( "[Load] {0}", load_rules_len ) );
+  for ( var i = 0; i < load_rules_len; ++i ){
+    var load_rule = load_rules[ i ];
+    array.push( ogas.string.format( "/{0}/{1}", load_rule.pattern, load_rule.flags ) );
+  }
+  
+  var text = array.join( "\n" );
+  slack_post( ogas.string.format( "@{0} {1}", user_name, text ) );
+}
+
 function slack_post( text ){
   var slack_incoming_webhook_url = ogas.vars.get( "slack_incoming_webhook_url" );
-  ogas.slack.post( slack_incoming_webhook_url, { text : text } );
+  ogas.slack.post( slack_incoming_webhook_url, { text : text, link_names : 1 } );
 }
 
 var ogas = ogas || {};
@@ -318,6 +365,22 @@ var ogas = ogas || {};
       column_values.push( values[ row_index ][ column_index ] );
     }
     return column_values;
+  };
+  
+  sheet.values_to_tables = function( values ){
+    var tables = [];
+    var keys = values[ 0 ];
+    var values_len = values.length;
+    for ( var row = 1; row < values_len; ++row ){
+      var value = values[ row ];
+      var value_len = value.length;
+      var record = {};
+      for ( var col = 0; col < value_len; ++col ){
+        record[ keys[ col ] ] = value[ col ];
+      }
+      tables.push( record );
+    }
+    return tables;
   };
 })(ogas.sheet = ogas.sheet || {});
 
@@ -483,6 +546,18 @@ ogas.Pattern.prototype.match = function( value ){
         ogas.string.padding_zero( 2, local_time.hour() ),
         ogas.string.padding_zero( 2, local_time.min() ),
         ogas.string.padding_zero( 2, local_time.sec() ) );
+    }break;
+    
+    case "hm":{
+      value = ogas.string.format( "{0}:{1}",
+        ogas.string.padding_zero( 2, local_time.hour() ),
+        ogas.string.padding_zero( 2, local_time.min() ) );
+    }break;
+    
+    case "HM":{
+      value = ogas.string.format( "{0}{1}",
+        ogas.string.padding_zero( 2, local_time.hour() ),
+        ogas.string.padding_zero( 2, local_time.min() ) );
     }break;
     }
     return value;

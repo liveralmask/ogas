@@ -211,9 +211,10 @@ global.on_init_config = function( sheet ){
 global.on_init_action_rules = function( sheet ){
   if ( "" == ogas.sheet.range( sheet, "A1" ).getValue() ){
     ogas.sheet.add_row( sheet, [ "name", "pattern", "flags" ] );
+    ogas.sheet.add_row( sheet, [ "test", "test" ] );
     ogas.sheet.add_row( sheet, [ "rule", "ルール" ] );
-    ogas.sheet.add_row( sheet, [ "in",   "お[っ]?は" ] );
-    ogas.sheet.add_row( sheet, [ "out",  "お[っ]?つ" ] );
+    ogas.sheet.add_row( sheet, [ "in",   "お[っ]?は|出[勤|社]" ] );
+    ogas.sheet.add_row( sheet, [ "out",  "お[っ]?つ|退[勤|社]" ] );
   }
   
   var tables = ogas.sheet.values_to_tables( ogas.sheet.range( sheet ).getValues() );
@@ -228,7 +229,10 @@ global.on_init_action_rules = function( sheet ){
 global.on_init_time_rules = function( sheet ){
   if ( "" == ogas.sheet.range( sheet, "A1" ).getValue() ){
     ogas.sheet.add_row( sheet, [ "name", "pattern", "flags" ] );
+    ogas.sheet.add_row( sheet, [ "mdhm", "([0-9]{1,2})/([0-9]{1,2}) ([0-9]{1,2}):([0-9]{1,2})" ] );
+    ogas.sheet.add_row( sheet, [ "md", "([0-9]{1,2})/([0-9]{1,2})" ] );
     ogas.sheet.add_row( sheet, [ "hm", "([0-9]{1,2}):([0-9]{1,2})" ] );
+    ogas.sheet.add_row( sheet, [ "tomorrow", "明日" ] );
   }
   
   var tables = ogas.sheet.values_to_tables( ogas.sheet.range( sheet ).getValues() );

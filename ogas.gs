@@ -37,7 +37,9 @@ function rules_to_array( rules, header ){
 function on_action_in( match ){
   var target_time = ogas.vars.get( "target_time" );
   var user_name = ogas.vars.get( "user_name" );
-  save( target_time, user_name, match.value.name, ogas.time.format( "hms", target_time ) );
+  var value = load( target_time, user_name );
+  value[ match.value.name ] = ogas.time.format( "hms", target_time );
+  save( target_time, user_name, value );
   
   slack_post( ogas.string.format( "@{0} {1} 出勤", user_name, ogas.time.format( "ymdhm", target_time ) ) );
 }
@@ -45,16 +47,37 @@ function on_action_in( match ){
 function on_action_out( match ){
   var target_time = ogas.vars.get( "target_time" );
   var user_name = ogas.vars.get( "user_name" );
-  save( target_time, user_name, match.value.name, ogas.time.format( "hms", target_time ) );
+  var value = load( target_time, user_name );
+  value[ match.value.name ] = ogas.time.format( "hms", target_time );
+  save( target_time, user_name, value );
   
   slack_post( ogas.string.format( "@{0} {1} 退勤", user_name, ogas.time.format( "ymdhm", target_time ) ) );
 }
 
-function save( target_time, user_name, action_key, action_value ){
+function user_cell( sheet, target_time, user_name ){
+  var row = target_time.date() + 1;
+  var user_names = ogas.sheet.rows( sheet, 1 ).getValues()[ 0 ];
+  user_names.shift();
+  var col = user_names.indexOf( user_name );
+  if ( -1 == col ) col = user_names.length;
+  col += 2;
+  return { row : row, col : col };
+}
+
+function load( target_time, user_name ){
+  var sheet_name = ogas.string.format( "{0}{1}", target_time.year(), ogas.string.padding_zero( 2, target_time.month() ) );
+  var sheet = ogas.sheet.open( ogas.vars.get( "spreadsheet" ), sheet_name );
+  
+  var value_cell = user_cell( sheet, target_time, user_name );
+  var value = ogas.sheet.range( sheet, value_cell.row, value_cell.col ).getValue();
+  return ( "" == value ) ? {} : ogas.json.decode( value );
+}
+
+function save( target_time, user_name, value ){
   var sheet_name = ogas.string.format( "{0}{1}", target_time.year(), ogas.string.padding_zero( 2, target_time.month() ) );
   var sheet = ogas.sheet.open( ogas.vars.get( "spreadsheet" ), sheet_name );
   if ( "" == ogas.sheet.range( sheet, "A1" ).getValue() ){
-    var cols = [ "user_name" ];
+    var cols = [ "dates" ];
     var dates = ogas.time.dates( target_time.year(), target_time.month(), ogas.vars.get( "days" ) );
     var dates_len = dates.length;
     for ( var i = 0; i < dates_len; ++i ){
@@ -64,20 +87,10 @@ function save( target_time, user_name, action_key, action_value ){
     ogas.sheet.add_col( sheet, cols );
   }
   
-  var row = target_time.date() + 1;
-  var user_names = ogas.sheet.rows( sheet, 1 ).getValues()[ 0 ];
-  user_names.shift();
-  var col = user_names.indexOf( user_name );
-  if ( -1 == col ) col = user_names.length;
-  col += 2;
-  var user_name_cell = ogas.sheet.range( sheet, 1, col );
+  var value_cell = user_cell( sheet, target_time, user_name );
+  var user_name_cell = ogas.sheet.range( sheet, 1, value_cell.col );
   if ( "" == user_name_cell.getValue() ) user_name_cell.setValue( user_name );
-  
-  var data_cell = ogas.sheet.range( sheet, row, col );
-  var data = data_cell.getValue();
-  data = ( "" == data ) ? {} : ogas.json.decode( data );
-  data[ action_key ] = action_value;
-  data_cell.setValue( ogas.json.encode( data ) );
+  ogas.sheet.range( sheet, value_cell.row, value_cell.col ).setValue( ogas.json.encode( value ) );
 }
 
 /* ----- time_rules function ----- */

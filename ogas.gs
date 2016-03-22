@@ -430,6 +430,12 @@ ogas.Pattern.prototype.match = function( value ){
     return [ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" ];
   };
   
+  time.holyday = function( year, month, date, day, holidays ){
+    if ( typeof holidays === "undefined" ) holidays = {};
+    
+    return ""; // TODO holyday
+  };
+  
   time.dates = function( year, month, string_days ){
     if ( typeof string_days === "undefined" ) string_days = time.string_days();
     

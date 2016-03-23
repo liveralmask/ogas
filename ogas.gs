@@ -21,7 +21,7 @@ var ogas = this;
       return;
     }
     
-    var rows = ogas.sheet.range_rows( s_sheet, s_sheet.getLastRow() );
+    var rows = ogas.sheet.rows( s_sheet, s_sheet.getLastRow() );
     var values = rows.getValues()[ 0 ];
     var row = rows.getRow();
     var col = values.indexOf( "" ) + 1;
@@ -66,10 +66,6 @@ var ogas = this;
 
 (function( cache ){
   var s_properties = PropertiesService.getScriptProperties();
-  cache.properties = function( value ){
-    if ( 1 == arguments.length ) s_properties = arguments[ 0 ];
-    return s_properties;
-  };
   
   cache.set = function( key, value ){
     s_properties.setProperty( key, value );
@@ -122,7 +118,7 @@ var ogas = this;
     return ( 0 < args.length ) ? _sheet.getRange.apply( _sheet, args ) : _sheet.getDataRange();
   };
   
-  sheet.range_rows = function(){
+  sheet.rows = function(){
     var args = Array.prototype.slice.call( arguments );
     var _sheet = args.shift();
     var row = args.pop();
@@ -132,7 +128,7 @@ var ogas = this;
     return sheet.range.apply( sheet, [ _sheet, row, 1, 1, last_col ] );
   };
   
-  sheet.range_cols = function(){
+  sheet.cols = function(){
     var args = Array.prototype.slice.call( arguments );
     var _sheet = args.shift();
     var col = args.pop();
@@ -161,7 +157,7 @@ var ogas = this;
     }
   };
   
-  sheet.cols_to_rows = function( values ){
+  sheet.col_to_row_values = function( values ){
     var new_values = [];
     var row_len = values.length;
     var col_len = values[ 0 ].length;
@@ -175,7 +171,7 @@ var ogas = this;
     return new_values;
   };
   
-  sheet.rows_to_cols = function( values ){
+  sheet.row_to_col_values = function( values ){
     var new_values = [];
     var row_len = values[ 0 ].length;
     var col_len = values.length;
@@ -189,8 +185,8 @@ var ogas = this;
     return new_values;
   };
   
-  sheet.values_to_tables = function( values ){
-    var tables = [];
+  sheet.values_to_records = function( values ){
+    var records = [];
     var keys = values[ 0 ];
     var keys_len = keys.length;
     var values_len = values.length;
@@ -200,9 +196,9 @@ var ogas = this;
       for ( var col = 0; col < keys_len; ++col ){
         record[ keys[ col ] ] = value[ col ];
       }
-      tables.push( record );
+      records.push( record );
     }
-    return tables;
+    return records;
   };
 })(ogas.sheet = ogas.sheet || {});
 
@@ -301,17 +297,22 @@ ogas.Pattern.prototype.match = function( value ){
   };
   
   json.decode = function( value ){
-    return JSON.parse( value );
+    var pattern = new ogas.Pattern( undefined, "([0-9]{4})/([0-9]{2})/([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2}).([0-9]{3})" );
+    return JSON.parse( value, function ( k, v ){
+      var match = pattern.match( v );
+      return ( null == match ) ? v : ogas.time.local_time.apply( ogas.time, match.matches.slice( 1 ) );
+    });
   };
 })(ogas.json = ogas.json || {});
 
 (function( time ){
-  time.LocalTime = function( year, month, date, hour, min, sec ){
+  time.LocalTime = function( year, month, date, hour, min, sec, msec ){
     if ( typeof hour === "undefined" ) hour = 0;
     if ( typeof min === "undefined" )  min = 0;
     if ( typeof sec === "undefined" )  sec = 0;
+    if ( typeof msec === "undefined" ) msec = 0;
     
-    var value = ( typeof year === "undefined" ) ? new Date() : new Date( year, month - 1, date, hour, min, sec );
+    var value = ( typeof year === "undefined" ) ? new Date() : new Date( year, month - 1, date, hour, min, sec, msec );
     
     this.m_value = value;
   };
@@ -345,9 +346,15 @@ ogas.Pattern.prototype.match = function( value ){
   time.LocalTime.prototype.toJSON = function(){
     return this.toString();
   };
+  time.LocalTime.prototype.is_same_date = function( local_time ){
+    if ( this.date() != local_time.date() ) return false;
+    if ( this.month() != local_time.month() ) return false;
+    if ( this.year() != local_time.year() ) return false;
+    return true;
+  };
   
-  time.local_time = function( year, month, date, hour, min, sec ){
-    return new time.LocalTime( year, month, date, hour, min, sec );
+  time.local_time = function( year, month, date, hour, min, sec, msec ){
+    return new time.LocalTime( year, month, date, hour, min, sec, msec );
   };
   
   time.first_date_time = function( year, month ){
@@ -372,6 +379,16 @@ ogas.Pattern.prototype.match = function( value ){
         ogas.string.padding_zero( 2, local_time.min() ),
         ogas.string.padding_zero( 2, local_time.sec() ),
         ogas.string.padding_zero( 3, local_time.msec() ) );
+    }break;
+    
+    case "ymdhms":{
+      value = ogas.string.format( "{0}/{1}/{2} {3}:{4}:{5}",
+        local_time.year(),
+        ogas.string.padding_zero( 2, local_time.month() ),
+        ogas.string.padding_zero( 2, local_time.date() ),
+        ogas.string.padding_zero( 2, local_time.hour() ),
+        ogas.string.padding_zero( 2, local_time.min() ),
+        ogas.string.padding_zero( 2, local_time.sec() ) );
     }break;
     
     case "ymdhm":{
@@ -434,6 +451,16 @@ ogas.Pattern.prototype.match = function( value ){
     if ( typeof holidays === "undefined" ) holidays = {};
     
     return ""; // TODO holyday
+  };
+  
+  time.date = function( year, month, date, day, holydays ){
+    return {
+      year    : year,
+      month   : month,
+      date    : date,
+      day     : day,
+      holyday : ogas.time.holyday( year, month, date, ( "index" in day ) ? day.index : day, holydays ),
+    };
   };
   
   time.dates = function( year, month, string_days ){
@@ -525,11 +552,20 @@ ogas.Application.prototype.end = function(){};
     }
   };
   
+  application.sheet = function( instance, spreadsheet, sheet_name, var_name, method_name ){
+    if ( typeof var_name === "undefined" )    var_name = ogas.string.format( "{0}_sheet", sheet_name );
+    if ( typeof method_name === "undefined" ) method_name = ogas.string.format( "on_sheet_{0}", sheet_name );
+    
+    var sheet = ogas.sheet.open( spreadsheet, sheet_name );
+    ogas.vars.set( ogas.string.format( var_name, sheet_name ), sheet );
+    ogas.method.call( instance, method_name, sheet );
+  };
+  
   application.add_patterns = function( type, sheet ){
-    var tables = ogas.sheet.values_to_tables( ogas.sheet.range( sheet ).getValues() );
-    var tables_len = tables.length;
-    for ( var i = 0; i < tables_len; ++i ){
-      var rule = tables[ i ];
+    var records = ogas.sheet.values_to_records( ogas.sheet.range( sheet ).getValues() );
+    var records_len = records.length;
+    for ( var i = 0; i < records_len; ++i ){
+      var rule = records[ i ];
       var pattern = rule.pattern;
       var flags   = rule.flags;
       delete rule.pattern;
@@ -543,12 +579,8 @@ ogas.Application.prototype.end = function(){};
     var rules_len = rules.length;
     for ( var i = 0; i < rules_len; ++i ){
       var rule = rules[ i ];
-      array.push( ogas.string.format( "{0}\t/{1}/{2}", rule.name, rule.pattern, rule.flags ) );
+      array.push( ogas.string.format( "{0} /{1}/{2}", rule.name, rule.pattern, rule.flags ) );
     }
     return array;
   };
 })(ogas.application = ogas.application || {});
-
-function spec(){
-  // TODO
-}

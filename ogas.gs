@@ -65,7 +65,11 @@ var ogas = this;
 })(ogas.log = ogas.log || {});
 
 (function( cache ){
-  var s_properties = PropertiesService.getScriptProperties();
+  var s_properties = null;
+  cache.properties = function(){
+    if ( 1 == arguments.length ) s_properties = arguments[ 0 ];
+    return s_properties;
+  };
   
   cache.set = function( key, value ){
     s_properties.setProperty( key, value );
@@ -452,7 +456,13 @@ ogas.Pattern.prototype.match = function( value ){
   time.holiday = function( year, month, date, day, holidays ){
     if ( typeof holidays === "undefined" ) holidays = {};
     
-    return ""; // TODO holiday
+    do{
+      if ( ! ( year in holidays ) ) break;
+      if ( ! ( month in holidays[ year ] ) ) break;
+      if ( ! ( date in holidays[ year ][ month ] ) ) break;
+      return holidays[ year ][ month ][ date ];
+    }while ( false );
+    return "";
   };
   
   time.date = function( year, month, date, day, holidays ){
@@ -595,7 +605,7 @@ ogas.Application.prototype.end = function(){};
   };
   
   http.request = function( url, params ){
-    if ( typeof params === "undefined" ) params = { method : "get",  };
+    if ( typeof params === "undefined" ) params = { method : "get" };
     
     return UrlFetchApp.fetch( url, params );
   };

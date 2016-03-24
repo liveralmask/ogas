@@ -207,12 +207,14 @@ var ogas = this;
     var args = Array.prototype.slice.call( arguments );
     var head = "";
     var tail = args.shift();
+    var args_len = args.length;
     var pattern = new ogas.Pattern( undefined, "\{([0-9]+)\}" );
     while ( "" != tail ){
       var match = pattern.match( tail );
       if ( null == match ) break;
       
-      head += match.head + args[ Number( match.matches[ 1 ] ) ];
+      var index = Number( match.matches[ 1 ] );
+      head += ( index < args_len ) ? match.head + args[ index ] : match.matches[ 0 ];
       tail = match.tail;
     }
     return head + tail;
@@ -298,7 +300,7 @@ ogas.Pattern.prototype.match = function( value ){
   
   json.decode = function( value ){
     var pattern = new ogas.Pattern( undefined, "([0-9]{4})/([0-9]{2})/([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2}).([0-9]{3})" );
-    return JSON.parse( value, function ( k, v ){
+    return JSON.parse( value, function( k, v ){
       var match = pattern.match( v );
       return ( null == match ) ? v : ogas.time.local_time.apply( ogas.time, match.matches.slice( 1 ) );
     });
@@ -447,19 +449,19 @@ ogas.Pattern.prototype.match = function( value ){
     return [ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" ];
   };
   
-  time.holyday = function( year, month, date, day, holidays ){
+  time.holiday = function( year, month, date, day, holidays ){
     if ( typeof holidays === "undefined" ) holidays = {};
     
-    return ""; // TODO holyday
+    return ""; // TODO holiday
   };
   
-  time.date = function( year, month, date, day, holydays ){
+  time.date = function( year, month, date, day, holidays ){
     return {
       year    : year,
       month   : month,
       date    : date,
       day     : day,
-      holyday : ogas.time.holyday( year, month, date, ( "index" in day ) ? day.index : day, holydays ),
+      holiday : ogas.time.holiday( year, month, date, ( "index" in day ) ? day.index : day, holidays ),
     };
   };
   
@@ -493,12 +495,6 @@ ogas.Pattern.prototype.match = function( value ){
   };
 })(ogas.method = ogas.method || {});
 
-(function( slack ){
-  slack.post = function( url, params ){
-    return UrlFetchApp.fetch( url, { method : "post", contentType : "application/json", payload : ogas.json.encode( params ) } );
-  };
-})(ogas.slack = ogas.slack || {});
-
 (function( stack ){
   stack.get = function( offset ){
     if ( typeof offset === "undefined" ) offset = 0;
@@ -515,7 +511,7 @@ ogas.Pattern.prototype.match = function( value ){
   };
 })(ogas.stack = ogas.stack || {});
 
-(function ( class ){
+(function( class ){
   class.inherits = function( self, parent ){
     self.prototype = new parent();
   };
@@ -524,6 +520,7 @@ ogas.Pattern.prototype.match = function( value ){
 ogas.Application = function(){
   this.m_is_update = false;
   this.m_request = {};
+  this.m_response = undefined;
 };
 ogas.Application.prototype.is_update = function(){
   if ( 1 == arguments.length ) this.m_is_update = arguments[ 0 ];
@@ -532,6 +529,10 @@ ogas.Application.prototype.is_update = function(){
 ogas.Application.prototype.request = function(){
   if ( 1 == arguments.length ) this.m_request = arguments[ 0 ];
   return this.m_request;
+};
+ogas.Application.prototype.response = function(){
+  if ( 1 == arguments.length ) this.m_response = arguments[ 0 ];
+  return this.m_response;
 };
 ogas.Application.prototype.start = function(){};
 ogas.Application.prototype.update = function(){};
@@ -547,6 +548,7 @@ ogas.Application.prototype.end = function(){};
       _application.start();
       if ( _application.is_update() ) _application.update();
       _application.end();
+      return _application.response();
     }catch ( err ){
       ogas.log.err( ogas.string.format( "{0}\n{1}\n{2}", err, err.stack, ogas.json.encode( this.m_request ) ) );
     }
@@ -584,3 +586,35 @@ ogas.Application.prototype.end = function(){};
     return array;
   };
 })(ogas.application = ogas.application || {});
+
+(function( http ){
+  http.content_type = function( type, charset ){
+    if ( typeof charset === "undefined" ) charset = "utf-8";
+    
+    return ogas.string.format( "{0}; charset={1}", type, charset );
+  };
+  
+  http.request = function( url, params ){
+    if ( typeof params === "undefined" ) params = { method : "get",  };
+    
+    return UrlFetchApp.fetch( url, params );
+  };
+  
+  http.response = function( type, value ){
+    switch ( type ){
+    case "json": type = ContentService.MimeType.JSON; break;
+    case "text": type = ContentService.MimeType.TEXT; break;
+    }
+    return ContentService.createTextOutput( value ).setMimeType( type );
+  };
+})(ogas.http = ogas.http || {});
+
+(function( slack ){
+  slack.post = function( url, params ){
+    return ogas.http.request( url, {
+      method      : "post",
+      contentType : ogas.http.content_type( "application/json" ),
+      payload     : ogas.json.encode( params )
+    } );
+  };
+})(ogas.slack = ogas.slack || {});

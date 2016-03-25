@@ -367,6 +367,49 @@ ogas.Application.prototype.end = function(){};
   };
 })(ogas.application = ogas.application || {});
 
+ogas.Log = function(){
+  
+};
+ogas.Log.prototype.write = function( type, msg ){};
+
+(function( log ){
+  var s_log = null;
+  log.log = function( value ){
+    if ( 1 == arguments.length ) s_log = value;
+    return s_log;
+  };
+  
+  log.timestamp = function( local_time ){
+    if ( typeof local_time === "undefined" ) local_time = ogas.time.local_time();
+    
+    return ogas.string.format( "[{0}]", ogas.time.format( "all", local_time ) );
+  };
+  
+  log.write = function( type, msg ){
+    if ( null != s_log ) s_log.write( type, msg );
+  }
+  
+  log.dbg = function(){
+    var msg = ogas.string.format.apply( null, Array.prototype.slice.call( arguments ) );
+    log.write( "dbg", msg );
+  };
+  
+  log.inf = function(){
+    var msg = ogas.string.format.apply( null, Array.prototype.slice.call( arguments ) );
+    log.write( "inf", msg );
+  };
+  
+  log.wrn = function(){
+    var msg = ogas.string.format.apply( null, Array.prototype.slice.call( arguments ) );
+    log.write( "wrn", msg );
+  };
+  
+  log.err = function(){
+    var msg = ogas.string.format.apply( null, Array.prototype.slice.call( arguments ) );
+    log.write( "err", msg );
+  };
+})(ogas.log = ogas.log || {});
+
 /* Google Apps Scripts */
 
 (function( spreadsheet ){
@@ -483,68 +526,53 @@ ogas.Application.prototype.end = function(){};
   };
 })(ogas.sheet = ogas.sheet || {});
 
-(function( log ){
-  var s_sheet = null;
-  log.sheet = function(){
-    if ( 1 == arguments.length ) s_sheet = arguments[ 0 ];
-    return s_sheet;
-  };
-  
-  log.timestamp = function( local_time ){
-    if ( typeof local_time === "undefined" ) local_time = ogas.time.local_time();
-    
-    return ogas.string.format( "[{0}]", ogas.time.format( "all", local_time ) );
-  };
-  
-  log.write = function( value, options ){
-    if ( typeof options === "undefined" ) options = {};
-    
-    if ( null == s_sheet ){
-      Logger.log( value ); // Logger.log() is GET method only
-      return;
-    }
-    
-    var rows = ogas.sheet.rows( s_sheet, s_sheet.getLastRow() );
-    var values = rows.getValues()[ 0 ];
-    var row = rows.getRow();
-    var col = values.indexOf( "" ) + 1;
-    if ( 0 == col ){
-      col = values.length + 1;
-      var max_col = s_sheet.getMaxColumns();
-      if ( max_col < col ){
-        col = 1;
-        row += 1;
-      }
-    }
-    
-    var cell = ogas.sheet.range( s_sheet, row, col );
-    cell.setValue( value );
-    if ( "fc" in options ) cell.setFontColor( options.fc );
-    if ( "ha" in options ) cell.setHorizontalAlignment( options.ha );
-    if ( "va" in options ) cell.setVerticalAlignment( options.va );
-    if ( "wp" in options ) cell.setWrap( options.wp );
+ogas.GASLog = function(){
+  this.m_sheet = null;
+};
+ogas.class.inherits( ogas.GASLog, ogas.Log );
+ogas.GASLog.prototype.sheet = function(){
+  if ( 1 == arguments.length ) this.m_sheet = arguments[ 0 ];
+  return this.m_sheet;
+};
+ogas.GASLog.prototype.write = function( type, msg ){
+  var options = {};
+  switch ( type ){
+  case "dbg": options = { fc : "blue" }; break;
+  case "inf": options = { fc : "black" }; break;
+  case "wrn": options = { fc : "olive" }; break;
+  case "err": options = { fc : "err" }; break;
   }
   
-  log.dbg = function(){
-    var value = ogas.string.format.apply( null, Array.prototype.slice.call( arguments ) );
-    log.write( value, { fc : "blue", ha : "left", va : "top", wp : false } );
-  };
+  if ( null == this.m_sheet ){
+    Logger.log( msg ); // Logger.log() is GET method only
+    return;
+  }
   
-  log.inf = function(){
-    var value = ogas.string.format.apply( null, Array.prototype.slice.call( arguments ) );
-    log.write( value, { fc : "black", ha : "left", va : "top", wp : false } );
-  };
+  var rows = ogas.sheet.rows( this.m_sheet, this.m_sheet.getLastRow() );
+  var values = rows.getValues()[ 0 ];
+  var row = rows.getRow();
+  var col = values.indexOf( "" ) + 1;
+  if ( 0 == col ){
+    col = values.length + 1;
+    var max_col = this.m_sheet.getMaxColumns();
+    if ( max_col < col ){
+      col = 1;
+      row += 1;
+    }
+  }
   
-  log.wrn = function(){
-    var value = ogas.string.format.apply( null, Array.prototype.slice.call( arguments ) );
-    log.write( value, { fc : "olive", ha : "left", va : "top", wp : false } );
-  };
-  
-  log.err = function(){
-    var value = ogas.string.format.apply( null, Array.prototype.slice.call( arguments ) );
-    log.write( value, { fc : "red", ha : "left", va : "top", wp : false } );
-  };
-})(ogas.log = ogas.log || {});
+  var cell = ogas.sheet.range( this.m_sheet, row, col );
+  cell.setValue( msg );
+  cell.setFontColor( options.fc );
+  cell.setHorizontalAlignment( "left" );
+  cell.setVerticalAlignment( "top" );
+  cell.setWrap( false );
+};
+ogas.log.log( new ogas.GASLog() );
+ogas.log.sheet = function(){
+  if ( 1 == arguments.length ) ogas.log.log().sheet( arguments[ 0 ] );
+  return ogas.log.log().sheet();
+};
 
 (function( cache ){
   var s_properties = null;

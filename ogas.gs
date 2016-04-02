@@ -322,7 +322,7 @@ ogas.Pattern.prototype.match = function( value ){
 ogas.Application = function(){
   this.m_is_update = false;
   this.m_request = {};
-  this.m_response = undefined;
+  this.m_response = {};
 };
 ogas.Application.prototype.is_update = function(){
   if ( 1 == arguments.length ) this.m_is_update = arguments[ 0 ];
@@ -344,16 +344,18 @@ ogas.Application.prototype.end = function(){};
   application.run = function( application_type, request ){
     if ( typeof request === "undefined" ) request = {};
     
+    var _application = null;
     try{
-      var _application = new application_type();
+      _application = new application_type();
       _application.request( request );
       _application.start();
       if ( _application.is_update() ) _application.update();
       _application.end();
-      return _application.response();
     }catch ( err ){
-      ogas.log.err( ogas.string.format( "{0}\n{1}\n{2}", err, err.stack, ogas.json.encode( this.m_request ) ) );
+      ogas.log.err( ogas.string.format( "{0}\n{1}\n{2}", err, err.stack, ogas.json.encode( request ) ) );
+      _application.response( null );
     }
+    return ( null != _application ) ? _application.response() : null;
   };
   
   application.rules_to_array = function( rules, title ){
@@ -540,7 +542,7 @@ ogas.GASLog.prototype.write = function( type, msg ){
   case "dbg": options = { fc : "blue" }; break;
   case "inf": options = { fc : "black" }; break;
   case "wrn": options = { fc : "olive" }; break;
-  case "err": options = { fc : "err" }; break;
+  case "err": options = { fc : "red" }; break;
   }
   
   if ( null == this.m_sheet ){
@@ -657,5 +659,17 @@ ogas.application.add_patterns = function( type, sheet ){
     delete rule.pattern;
     delete rule.flags;
     ogas.pattern.add( type, rule, pattern, flags );
+  }
+};
+
+ogas.application.input_spreadsheet_id = function(){
+  var spreadsheet_id = Browser.inputBox( "Input spreadsheet id." );
+  switch ( spreadsheet_id ){
+  case "":
+  case "cancel":{}break;
+  
+  default:{
+    ogas.cache.set( "spreadsheet_id", spreadsheet_id );
+  }break;
   }
 };

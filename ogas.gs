@@ -19,7 +19,7 @@ opjs.object.inherits( ogas, opjs );
   };
   
   sheet.open = function( spreadsheet, name, insert_index ){
-    if ( typeof insert_index === "undefined" ) insert_index = spreadsheet.getNumSheets();
+    if ( ogas.is_undef( insert_index ) ) insert_index = spreadsheet.getNumSheets();
     
     var _sheet = sheet.get( spreadsheet, name );
     if ( null === _sheet ) _sheet = spreadsheet.insertSheet( name, insert_index );
@@ -128,10 +128,10 @@ ogas.GASLog.prototype.sheet = function(){
 ogas.GASLog.prototype.write = function( type, msg ){
   var options = {};
   switch ( type ){
-  case "dbg": options = { fc : "blue" }; break;
-  case "inf": options = { fc : "black" }; break;
-  case "wrn": options = { fc : "olive" }; break;
-  case "err": options = { fc : "red" }; break;
+  case "dbg": options = { "fc" : "blue" }; break;
+  case "inf": options = { "fc" : "black" }; break;
+  case "wrn": options = { "fc" : "olive" }; break;
+  case "err": options = { "fc" : "red" }; break;
   }
   
   if ( null === this.m_sheet ){
@@ -183,7 +183,7 @@ ogas.log.sheet = function(){
 
 (function( stack ){
   stack.get = function( offset ){
-    if ( typeof offset === "undefined" ) offset = 0;
+    if ( ogas.is_undef( offset ) ) offset = 0;
     
     var stacks = [];
     try{
@@ -199,13 +199,13 @@ ogas.log.sheet = function(){
 
 (function( http ){
   http.content_type = function( type, charset ){
-    if ( typeof charset === "undefined" ) charset = "utf-8";
+    if ( ogas.is_undef( charset ) ) charset = "utf-8";
     
     return ogas.string.format( "{0}; charset={1}", type, charset );
   };
   
   http.request = function( url, params ){
-    if ( typeof params === "undefined" ) params = { method : "get" };
+    if ( ogas.is_undef( params ) ) params = { method : "get" };
     
     return UrlFetchApp.fetch( url, params );
   };
@@ -230,8 +230,8 @@ ogas.log.sheet = function(){
 })(ogas.slack = ogas.slack || {});
 
 ogas.application.sheet = function( instance, spreadsheet, sheet_name, var_name, method_name ){
-  if ( typeof var_name === "undefined" )    var_name = ogas.string.format( "{0}_sheet", sheet_name );
-  if ( typeof method_name === "undefined" ) method_name = ogas.string.format( "on_sheet_{0}", sheet_name );
+  if ( ogas.is_undef( var_name ) )    var_name = ogas.string.format( "{0}_sheet", sheet_name );
+  if ( ogas.is_undef( method_name ) ) method_name = ogas.string.format( "on_sheet_{0}", sheet_name );
   
   var sheet = ogas.sheet.open( spreadsheet, sheet_name );
   ogas.vars.set( ogas.string.format( var_name, sheet_name ), sheet );

@@ -22,7 +22,7 @@ opjs.object.inherits( ogas, opjs );
     if ( typeof insert_index === "undefined" ) insert_index = spreadsheet.getNumSheets();
     
     var _sheet = sheet.get( spreadsheet, name );
-    if ( null == _sheet ) _sheet = spreadsheet.insertSheet( name, insert_index );
+    if ( null === _sheet ) _sheet = spreadsheet.insertSheet( name, insert_index );
     return _sheet;
   };
   
@@ -37,9 +37,9 @@ opjs.object.inherits( ogas, opjs );
     var args = Array.prototype.slice.call( arguments );
     var _sheet = args.shift();
     var row = args.pop();
-    if ( 0 == row ) row = 1;
+    if ( 0 === row ) row = 1;
     var last_col = _sheet.getLastColumn();
-    if ( 0 == last_col ) last_col = 1;
+    if ( 0 === last_col ) last_col = 1;
     return sheet.range.apply( sheet, [ _sheet, row, 1, 1, last_col ] );
   };
   
@@ -47,9 +47,9 @@ opjs.object.inherits( ogas, opjs );
     var args = Array.prototype.slice.call( arguments );
     var _sheet = args.shift();
     var col = args.pop();
-    if ( 0 == col ) col = 1;
+    if ( 0 === col ) col = 1;
     var last_row = _sheet.getLastRow();
-    if ( 0 == last_row ) last_row = 1;
+    if ( 0 === last_row ) last_row = 1;
     return sheet.range.apply( sheet, [ _sheet, 1, col, last_row, 1 ] );
   };
   
@@ -134,7 +134,7 @@ ogas.GASLog.prototype.write = function( type, msg ){
   case "err": options = { fc : "red" }; break;
   }
   
-  if ( null == this.m_sheet ){
+  if ( null === this.m_sheet ){
     Logger.log( msg ); // Logger.log() is GET method only
     return;
   }
@@ -143,7 +143,7 @@ ogas.GASLog.prototype.write = function( type, msg ){
   var values = rows.getValues()[ 0 ];
   var row = rows.getRow();
   var col = values.indexOf( "" ) + 1;
-  if ( 0 == col ){
+  if ( 0 === col ){
     col = values.length + 1;
     var max_col = this.m_sheet.getMaxColumns();
     if ( max_col < col ){

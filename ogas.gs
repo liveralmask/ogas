@@ -65,54 +65,46 @@ opjs.object.inherits( ogas, opjs );
     var args = Array.prototype.slice.call( arguments );
     var _sheet = args.shift();
     var values = args.pop();
-    var values_len = values.length;
     var last_col = _sheet.getLastColumn() + 1;
-    for ( var i = 0; i < values_len; ++i ){
-      sheet.range( _sheet, 1 + i, last_col, 1, 1 ).setValue( values[ i ] );
-    }
+    ogas.array.each( values, function( value, i ){
+      sheet.range( _sheet, 1 + i, last_col, 1, 1 ).setValue( value );
+    });
   };
   
   sheet.col_to_row_values = function( values ){
     var new_values = [];
-    var row_len = values.length;
-    var col_len = values[ 0 ].length;
-    for ( var col = 0; col < col_len; ++col ){
+    ogas.array.each( values[ 0 ], function( col_value, col ){
       var value = [];
-      for ( var row = 0; row < row_len; ++row ){
+      ogas.array.each( values, function( row_value, row ){
         value.push( values[ row ][ col ] );
-      }
+      });
       new_values.push( value );
-    }
+    });
     return new_values;
   };
   
   sheet.row_to_col_values = function( values ){
     var new_values = [];
-    var row_len = values[ 0 ].length;
-    var col_len = values.length;
-    for ( var row = 0; row < row_len; ++row ){
+    ogas.array.each( values[ 0 ], function( row_value, row ){
       var value = [];
-      for ( var col = 0; col < col_len; ++col ){
+      ogas.array.each( values, function( col_value, col ){
         value.push( values[ row ][ col ] );
-      }
+      });
       new_values.push( value );
-    }
+    });
     return new_values;
   };
   
   sheet.values_to_records = function( values ){
     var records = [];
     var keys = values[ 0 ];
-    var keys_len = keys.length;
-    var values_len = values.length;
-    for ( var row = 1; row < values_len; ++row ){
-      var value = values[ row ];
+    ogas.array.each( values, function( row_value, row ){
       var record = {};
-      for ( var col = 0; col < keys_len; ++col ){
-        record[ keys[ col ] ] = value[ col ];
-      }
+      ogas.array.each( values[ 0 ], function( col_value, col ){
+        record[ keys[ col ] ] = row_value[ col ];
+      });
       records.push( record );
-    }
+    });
     return records;
   };
 })(ogas.sheet = ogas.sheet || {});
@@ -135,7 +127,7 @@ ogas.GASLog.prototype.write = function( type, msg ){
   }
   
   if ( null === this.m_sheet ){
-    Logger.log( msg ); // Logger.log() is GET method only
+    Logger.log( ogas.string.format( "{0}\n{1}", msg, ogas.stack.get() ) ); // Logger.log() is GET method only
     return;
   }
   
@@ -159,10 +151,10 @@ ogas.GASLog.prototype.write = function( type, msg ){
   cell.setVerticalAlignment( "top" );
   cell.setWrap( false );
 };
-ogas.log.log( new ogas.GASLog() );
+ogas.log.set( new ogas.GASLog() );
 ogas.log.sheet = function(){
-  if ( 1 == arguments.length ) ogas.log.log().sheet( arguments[ 0 ] );
-  return ogas.log.log().sheet();
+  if ( 1 == arguments.length ) ogas.log.get().sheet( arguments[ 0 ] );
+  return ogas.log.get().sheet();
 };
 
 (function( cache ){
@@ -180,22 +172,6 @@ ogas.log.sheet = function(){
     return s_properties.getProperty( key );
   };
 })(ogas.cache = ogas.cache || {});
-
-(function( stack ){
-  stack.get = function( offset ){
-    if ( ogas.is_undef( offset ) ) offset = 0;
-    
-    var stacks = [];
-    try{
-      throw new Error();
-    }catch ( err ){
-      stacks = err.stack.split( "\n" );
-      stacks.shift();
-      stacks = stacks.slice( offset );
-    }
-    return stacks.join( "\n" );
-  };
-})(ogas.stack = ogas.stack || {});
 
 (function( http ){
   http.content_type = function( type, charset ){
@@ -240,15 +216,14 @@ ogas.application.sheet = function( instance, spreadsheet, sheet_name, var_name, 
 
 ogas.application.add_patterns = function( type, sheet ){
   var records = ogas.sheet.values_to_records( ogas.sheet.range( sheet ).getValues() );
-  var records_len = records.length;
-  for ( var i = 0; i < records_len; ++i ){
-    var rule = records[ i ];
+  records.shift();
+  ogas.array.each( records, function( rule, i ){
     var pattern = rule.pattern;
     var flags   = rule.flags;
     delete rule.pattern;
     delete rule.flags;
     ogas.pattern.add( type, rule, pattern, flags );
-  }
+  });
 };
 
 ogas.application.input_spreadsheet_id = function(){

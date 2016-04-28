@@ -97,10 +97,10 @@ opjs.object.inherits( ogas, opjs );
   
   sheet.values_to_records = function( values ){
     var records = [];
-    var keys = values[ 0 ];
+    var keys = values.shift();
     ogas.array.each( values, function( row_value, row ){
       var record = {};
-      ogas.array.each( values[ 0 ], function( col_value, col ){
+      ogas.array.each( keys, function( col_value, col ){
         record[ keys[ col ] ] = row_value[ col ];
       });
       records.push( record );
@@ -216,7 +216,6 @@ ogas.application.sheet = function( instance, spreadsheet, sheet_name, var_name, 
 
 ogas.application.add_patterns = function( type, sheet ){
   var records = ogas.sheet.values_to_records( ogas.sheet.range( sheet ).getValues() );
-  records.shift();
   ogas.array.each( records, function( rule, i ){
     var pattern = rule.pattern;
     var flags   = rule.flags;
